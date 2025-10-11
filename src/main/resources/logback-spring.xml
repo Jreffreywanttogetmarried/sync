@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- 从Spring配置中读取属性 -->
+    <springProperty scope="context" name="BASE_PATH" source="logging.basePath" defaultValue="logs" />
+    <springProperty scope="context" name="APPLICATION_NAME" source="spring.application.name" defaultValue="sync" />
+    <springProperty scope="context" name="LOG_LEVEL_ROOT" source="logging.level.root" defaultValue="INFO" />
+    <springProperty scope="context" name="LOG_LEVEL_APP" source="logging.level.com.easydeals.sync" defaultValue="DEBUG" />
+
+    <!-- 定义日志输出格式 -->
+    <property name="CONSOLE_LOG_PATTERN" 
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%blue(%thread)] %yellow(%logger{36}) %cyan([%file:%line]) : %msg%n%throwable"/>
+    
+    <property name="FILE_LOG_PATTERN" 
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{50} [%file:%line] : %msg%n%throwable"/>
+
+    <!-- 控制台输出配置 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <!-- 只输出INFO及以上级别的日志 -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
+    <!-- 文件输出配置 - 所有日志 -->
+    <appender name="FILE_ALL" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${BASE_PATH}/${APPLICATION_NAME}.log</file>
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        
+        <!-- 滚动策略：按天和大小分割 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!-- 日志文件命名格式：YYYY-MM-DD.log 或 YYYY-MM-DD_序号.log -->
+            <fileNamePattern>${BASE_PATH}/${APPLICATION_NAME}-%d{yyyy-MM-dd}_%i.log.gz</fileNamePattern>
+            <!-- 单个文件最大大小 -->
+            <maxFileSize>10MB</maxFileSize>
+            <!-- 永久保留所有历史日志文件，不自动删除 -->
+        </rollingPolicy>
+        
+        <!-- 输出DEBUG及以上级别的日志 -->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>DEBUG</level>
+        </filter>
+    </appender>
+
+    <!-- 错误日志单独输出 -->
+    <appender name="FILE_ERROR" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${BASE_PATH}/${APPLICATION_NAME}-error.log</file>
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${BASE_PATH}/${APPLICATION_NAME}-error-%d{yyyy-MM-dd}_%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <!-- 永久保留所有错误日志文件，不自动删除 -->
+        </rollingPolicy>
+        
+        <!-- 只输出ERROR级别的日志 -->
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <!-- 异步日志配置，提高性能 -->
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <discardingThreshold>0</discardingThreshold>
+        <queueSize>1024</queueSize>
+        <includeCallerData>true</includeCallerData>
+        <appender-ref ref="FILE_ALL"/>
+    </appender>
+
+    <appender name="ASYNC_ERROR" class="ch.qos.logback.classic.AsyncAppender">
+        <discardingThreshold>0</discardingThreshold>
+        <queueSize>256</queueSize>
+        <includeCallerData>true</includeCallerData>
+        <appender-ref ref="FILE_ERROR"/>
+    </appender>
+
+    <!-- 特定包的日志级别配置 -->
+    <logger name="com.easydeals.sync" level="${LOG_LEVEL_APP}" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="ASYNC_ERROR"/>
+    </logger>
+
+    <!-- 第三方框架日志级别控制 -->
+    <logger name="org.springframework" level="INFO"/>
+    <logger name="org.springframework.retry" level="DEBUG"/>
+    <logger name="org.apache.ibatis" level="INFO"/>
+    <logger name="org.mybatis" level="INFO"/>
+    <logger name="com.mysql" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+    <logger name="org.redisson" level="INFO"/>
+    <logger name="io.lettuce" level="WARN"/>
+    <logger name="org.springframework.web" level="INFO"/>
+    <logger name="org.springframework.boot" level="INFO"/>
+
+    <!-- 开发环境配置 -->
+    <springProfile name="dev,local">
+        <logger name="com.easydeals.sync" level="DEBUG"/>
+        <logger name="org.springframework.web" level="DEBUG"/>
+        <logger name="org.apache.ibatis" level="DEBUG"/>
+    </springProfile>
+
+    <!-- 生产环境配置 -->
+    <springProfile name="prod">
+        <logger name="com.easydeals.sync" level="INFO"/>
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="org.apache.ibatis" level="WARN"/>
+    </springProfile>
+
+    <!-- 根日志配置 -->
+    <root level="${LOG_LEVEL_ROOT}">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="ASYNC_ERROR"/>
+    </root>
+
+</configuration>

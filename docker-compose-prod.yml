@@ -1,0 +1,230 @@
+# ========================================
+# Docker Compose Configuration for Production Environment
+# ========================================
+# This configuration sets up a production-ready environment with:
+# - Spring Boot application with multiple replicas
+# - External MySQL database connection
+# - Redis cluster configuration
+# - SSL/TLS support
+# - Health checks and monitoring
+# - Resource limits and security settings
+
+version: '3.8'
+
+services:
+  # ========================================
+  # Spring Boot Application Service
+  # ========================================
+  sync-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        - SPRING_PROFILE=prod
+    image: sync-app:${APP_VERSION:-latest}
+    container_name: sync-app-prod-${HOSTNAME:-1}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+      - "${MANAGEMENT_PORT:-8081}:8081"
+    environment:
+      # Spring Profile Configuration
+      - SPRING_PROFILES_ACTIVE=prod
+      
+      # Database Configuration (External Production Database)
+      - DB_URL=${DB_URL}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      
+      # Redis Cluster Configuration
+      - REDIS_CLUSTER_NODES=${REDIS_CLUSTER_NODES}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      
+      # Logging Configuration
+      - LOG_PATH=/app/logs
+      
+      # Security Configuration
+      - SECURITY_USER=${SECURITY_USER}
+      - SECURITY_PASSWORD=${SECURITY_PASSWORD}
+      - SSL_ENABLED=${SSL_ENABLED:-false}
+      - SSL_KEYSTORE_PATH=${SSL_KEYSTORE_PATH:-}
+      - SSL_KEYSTORE_PASSWORD=${SSL_KEYSTORE_PASSWORD:-}
+      
+      # External API Configuration
+      - CRM_API_URL=${CRM_API_URL}
+      - CRM_API_TIMEOUT=${CRM_API_TIMEOUT:-15000}
+      - CRM_RETRY_MAX=${CRM_RETRY_MAX:-5}
+      - CRM_RETRY_DELAY=${CRM_RETRY_DELAY:-2000}
+      
+      # Rate Limiting Configuration
+      - RATE_LIMIT_CRM=${RATE_LIMIT_CRM:-100}
+      - RATE_LIMIT_WAIT=${RATE_LIMIT_WAIT:-60000}
+      
+      # Task Configuration
+      - TASK_BATCH_SIZE=${TASK_BATCH_SIZE:-5}
+      
+      # JVM Configuration for Production
+      - JAVA_OPTS=-Xms${JVM_MIN_HEAP:-2g} -Xmx${JVM_MAX_HEAP:-4g} -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs -Dspring.config.additional-location=classpath:/redisson-prod.yml
+    volumes:
+      # Persistent logs storage
+      - /var/log/sync-app:/app/logs
+      # SSL certificates (if enabled)
+      - ${SSL_CERT_PATH:-/dev/null}:/app/ssl:ro
+    networks:
+      - sync-prod-network
+    restart: unless-stopped
+    deploy:
+      replicas: ${APP_REPLICAS:-2}
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT:-2.0}'
+          memory: ${MEMORY_LIMIT:-4G}
+        reservations:
+          cpus: '${CPU_RESERVATION:-1.0}'
+          memory: ${MEMORY_RESERVATION:-2G}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 60s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"  # Non-root user for security
+
+  # ========================================
+  # Load Balancer (Nginx)
+  # ========================================
+  nginx:
+    image: nginx:alpine
+    container_name: sync-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      - /var/log/nginx:/var/log/nginx
+    depends_on:
+      - sync-app
+    networks:
+      - sync-prod-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ========================================
+  # Monitoring Services
+  # ========================================
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: sync-prometheus-prod
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - sync-prod-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: sync-grafana-prod
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - sync-prod-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # ========================================
+  # Log Management
+  # ========================================
+  # Filebeat for log shipping
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.0
+    container_name: sync-filebeat-prod
+    user: root
+    volumes:
+      - ./docker/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/log/sync-app:/var/log/sync-app:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - ELASTICSEARCH_HOSTS=${ELASTICSEARCH_HOSTS:-http://elasticsearch:9200}
+    networks:
+      - sync-prod-network
+    restart: unless-stopped
+    profiles:
+      - logging
+
+# ========================================
+# Network Configuration
+# ========================================
+networks:
+  sync-prod-network:
+    driver: bridge
+    name: sync-prod-network
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ========================================
+# Volume Configuration
+# ========================================
+volumes:
+  prometheus_data:
+    name: sync_prometheus_prod_data
+    driver: local
+  grafana_data:
+    name: sync_grafana_prod_data
+    driver: local
+
+# ========================================
+# Configuration Notes
+# ========================================
+# 1. This configuration assumes external MySQL and Redis services
+# 2. SSL certificates should be mounted from the host system
+# 3. All sensitive data should be provided via environment variables
+# 4. Resource limits should be adjusted based on server capacity
+# 5. Monitoring services are optional (use --profile monitoring)
+# 6. Log shipping is optional (use --profile logging)
+# 7. Multiple app replicas require external load balancer configuration

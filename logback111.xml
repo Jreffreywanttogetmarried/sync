@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <springProperty scope="context" name="BASE_PATH" source="logging.basePath" defaultValue="logs" />
+    <springProperty scope="context" name="application.name" source="spring.application.name" />
+
+    <appender name="Console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <maxStackTraceSize>-1</maxStackTraceSize>
+        </encoder>
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <Pattern>
+                %white(%d{ISO8601}) %highlight(%-5level) [%blue(%t)] %yellow(%logger) %cyan(%line): %msg%n%throwable
+            </Pattern>
+        </layout>
+    </appender>
+
+    <appender name="RollingFile"
+        class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${BASE_PATH}/${application.name}.log</file>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger - %msg%n</pattern>
+            <maxStackTraceSize>-1</maxStackTraceSize>
+        </encoder>
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <Pattern>
+                %d{ISO8601} %-5level [%t] %logger %line: %msg%n%throwable
+            </Pattern>
+        </layout>
+
+        <rollingPolicy
+            class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- rollover daily and when the file reaches 10 MegaBytes -->
+            <fileNamePattern>${BASE_PATH}/${application.name}-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy
+                class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Set logging levels for specific packages -->
+    <logger name="org.hibernate" level="INFO"/>
+    <logger name="org.hibernate.SQL" level="INFO"/>
+    <logger name="org.hibernate.type" level="INFO"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+    <logger name="org.springframework" level="INFO"/>
+    <logger name="com.easydeals.tuzi" level="DEBUG"/>
+
+    <!-- LOG everything at INFO level -->
+    <root level="INFO">
+        <appender-ref ref="RollingFile" />
+        <appender-ref ref="Console" />
+    </root>
+
+</configuration>

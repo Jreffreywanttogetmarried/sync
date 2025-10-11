@@ -1,0 +1,133 @@
+### 健康检查
+GET http://localhost:8080/api/sync/health
+
+### 提交同步任务
+POST http://localhost:8080/api/sync/submit
+Content-Type: application/json
+
+{
+  "websiteCode": "aom",
+  "dataType": "CUSTOMER",
+  "dataList": [
+    {
+      "businessId": "51",
+      "getTime": "2025-01-08T20:27:01+08:00",
+      "cusName": "测试客户9",
+      "classID": "普通客户",
+      "customize4": "tes8t@example.com",
+      "website": "aom",
+      "linkManList": [
+        {
+          "realName": "张三9",
+          "mobilePhone": "13811111121"
+        }
+      ]
+    },
+    {
+      "businessId": "57",
+      "getTime": "2025-10-09T10:00:00+08:00",
+      "cusName": "测试客户15",
+      "classID": "普通客户",
+      "customize4": "test114@example.com",
+      "website": "aom",
+      "linkManList": [
+        {
+          "realName": "李四15",
+          "mobilePhone": "13823233242"
+        }
+      ]
+    },
+    {
+      "businessId": "53",
+      "getTime": "2025-10-09T10:05:00+08:00",
+      "cusName": "测试客户11",
+      "classID": "普通客户",
+      "customize4": "test11@example.com",
+      "website": "aom",
+      "linkManList": [
+        {
+          "realName": "王五11",
+          "mobilePhone": "13833333333"
+        }
+      ]
+    }
+  ]
+}
+
+
+### 查询任务状态（需要替换实际的taskId）
+GET http://localhost:8080/api/sync/status/TASK_1704729621000_ABC12345
+
+### 批量提交测试
+POST http://localhost:8080/api/sync/submit
+Content-Type: application/json
+
+{
+  "websiteCode": "WEBSITE002",
+  "dataType": "CUSTOMER",
+  "dataList": [
+    {
+      "businessId": "BATCH001",
+      "cusName": "批量测试客户1",
+      "linkManList": [
+        {
+          "realName": "批量用户1"
+        }
+      ]
+    },
+    {
+      "businessId": "BATCH002",
+      "cusName": "批量测试客户2",
+      "linkManList": [
+        {
+          "realName": "批量用户2"
+        }
+      ]
+    },
+    {
+      "businessId": "BATCH003",
+      "cusName": "批量测试客户3",
+      "linkManList": [
+        {
+          "realName": "批量用户3"
+        }
+      ]
+    }
+  ]
+}
+
+### 测试参数校验失败
+POST http://localhost:8080/api/sync/submit
+Content-Type: application/json
+
+{
+  "websiteCode": "",
+  "dataType": "CUSTOMER",
+  "dataList": [
+    {
+      "businessId": "",
+      "cusName": "",
+      "linkManList": []
+    }
+  ]
+}
+
+### 测试重复数据
+POST http://localhost:8080/api/sync/submit
+Content-Type: application/json
+
+{
+  "websiteCode": "WEBSITE001",
+  "dataType": "CUSTOMER",
+  "dataList": [
+    {
+      "businessId": "BIZ001",
+      "cusName": "重复的测试客户",
+      "linkManList": [
+        {
+          "realName": "重复用户"
+        }
+      ]
+    }
+  ]
+}

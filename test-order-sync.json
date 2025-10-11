@@ -1,0 +1,63 @@
+{
+  "websiteCode": "aom",
+  "dataType": "ORDER",
+  "dataList": [
+    {
+      "businessId": "ORDER_001",
+      "title": "测试订单001",
+      "cusName": "测试客户15",
+      "cusMobilePhone": "13823233242",
+      "dealAmount": 299.99,
+      "dealTime": "2024-01-15T10:30:00+08:00",
+      "payModeID": "信用卡",
+      "dealStateID": "已付款",
+      "intro": "这是一个测试订单",
+      "recipient": "0000001",
+      "shippingAddress": "北京市朝阳区测试街道123号",
+      "postCode": "100000",
+      "website": "aom",
+      "paymentFirstLastName": "张三",
+      "paymentCompany": "测试公司",
+      "paymentAddress1": "北京市朝阳区",
+      "paymentAddress2": "测试街道123号",
+      "paymentCountry": "中国",
+      "paymentPostcode": "100000",
+      "paymentCity": "北京",
+      "paymentZone": "朝阳区",
+      "shippingFirstLastName": "张三",
+      "shippingCompany": "测试公司",
+      "shippingAddress1": "北京市朝阳区",
+      "shippingAddress2": "测试街道123号",
+      "shippingCity": "北京",
+      "shippingPostcode": "100000",
+      "shippingCountry": "中国",
+      "shippingZone": "朝阳区",
+      "shippingMethod": "快递",
+      "ip": "192.168.1.100",
+      "dealProductList": [
+        {
+          "skuProduct": "test-abc",
+          "productName": "测试产品",
+          "productSpecsName": "测试规格名称1:测试规格值1",
+          "unitPrice": 99.99,
+          "dealCount": 2,
+          "dealPrice": 199.98,
+          "remark": "测试产品备注",
+          "originalPrice": 199.98,
+          "actualUnitPrice": 99.99
+        },
+        {
+          "skuProduct": "test-abc",
+          "productName": "测试产品",
+          "productSpecsName": "尺寸:M/测试规格名称1:测试规格值1",
+          "unitPrice": 50.00,
+          "dealCount": 2,
+          "dealPrice": 100.00,
+          "remark": "另一个测试产品",
+          "originalPrice": 100.00,
+          "actualUnitPrice": 50.00
+        }
+      ]
+    }
+  ]
+}
