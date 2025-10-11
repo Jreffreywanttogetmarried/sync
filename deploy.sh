@@ -603,13 +603,15 @@ show_deployment_summary() {
 
 # Main deployment function
 main() {
+    # Setup directories first (before any logging)
+    setup_directories
+    
     print_info "Starting deployment process..."
     print_info "Script: $0"
     print_info "Arguments: $*"
     print_info "Log file: $LOG_FILE"
 
-    # Setup
-    setup_directories
+    # Parse arguments and continue setup
     parse_arguments "$@"
     check_prerequisites
     check_code_updates
