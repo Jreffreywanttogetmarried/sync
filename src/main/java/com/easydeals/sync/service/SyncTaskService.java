@@ -76,10 +76,10 @@ public class SyncTaskService {
                     );
                     
                     if (existingTask != null) {
-                        log.warn("任务已存在且已成功: websiteCode={}, businessId={}", 
-                                request.getWebsiteCode(), businessId);
+                        log.warn("任务已存在且已成功: websiteCode={}, businessId={}", request.getWebsiteCode(), businessId);
                         failedTasks.add(SyncResponse.FailedTask.builder()
                                 .businessId(businessId)
+                                .dataType(existingTask.getDataType())
                                 .reason("数据已存在且已成功同步")
                                 .build());
                         continue;
@@ -253,6 +253,24 @@ public class SyncTaskService {
     }
     
     /**
+     * 更新任务为延迟重试状态
+     */
+    @Transactional
+    public void updateTaskToDelayedRetry(String taskId, String errorMsg) {
+        syncTaskMapper.updateToDelayedRetry(taskId, errorMsg, LocalDateTime.now());
+        log.info("任务已更新为延迟重试状态: taskId={}, errorMsg={}", taskId, errorMsg);
+    }
+
+    /**
+     * 更新任务状态为重试中
+     */
+    @Transactional
+    public void updateTaskToRetrying(String taskId) {
+        syncTaskMapper.updateStatus(taskId, SyncTask.Status.RETRYING.getCode(), LocalDateTime.now());
+        log.info("任务状态更新为重试中: taskId={}", taskId);
+    }
+    
+    /**
      * 更新任务CRM请求编码
      */
     @Transactional
@@ -292,6 +310,21 @@ public class SyncTaskService {
         
         log.error("任务状态更新为失败: taskId={}, errorMsg={}", taskId, errorMsg);
     }
+
+    @Transactional
+    public void updateTaskToFailedAfterReTry(String taskId, String errorMsg) {
+        syncTaskMapper.updateToFailedAfterReTry(taskId, errorMsg, LocalDateTime.now());
+
+        // 更新批次统计
+        SyncTask task = syncTaskMapper.findByTaskId(taskId);
+        if (task != null) {
+            syncBatchService.updateBatchStatistics(task.getBatchId());
+        }
+
+        log.error("任务状态更新为失败: taskId={}, errorMsg={}", taskId, errorMsg);
+    }
+
+
     
     /**
      * 获取任务详情
@@ -323,8 +356,45 @@ public class SyncTaskService {
     }
     
     /**
+     * 查询需要回调的任务
+     */
+    public List<SyncTask> findTasksNeedCallback(String websiteCode, Integer limit) {
+        return syncTaskMapper.findTasksNeedCallback(websiteCode, limit);
+    }
+    
+    /**
+     * 更新回调状态
+     */
+    @Transactional
+    public void updateCallbackStatus(String taskId, Integer callbackStatus, LocalDateTime updatedAt) {
+        syncTaskMapper.updateCallbackStatus(taskId, callbackStatus, updatedAt);
+    }
+    
+    /**
      * 生成任务ID
      */
+    /**
+     * 将延迟重试任务更新为成功状态
+     * 同时清除错误信息并保存CRM请求编码
+     */
+    @Transactional
+    public void updateDelayedRetryTaskToSuc(String taskId, String crmRequestCode) {
+        try {
+            log.info("更新延迟重试任务状态为Suc: taskId={}, crmRequestCode={}", taskId, crmRequestCode);
+
+            int updatedRows = syncTaskMapper.updateDelayedRetryTaskToSuc(taskId, crmRequestCode);
+            
+            if (updatedRows > 0) {
+                log.info("延迟重试任务状态更新成功: taskId={}, updatedRows={}", taskId, updatedRows);
+            } else {
+                log.warn("延迟重试任务状态更新失败，可能任务不存在或状态不匹配: taskId={}", taskId);
+            }
+        } catch (Exception e) {
+            log.error("更新延迟重试任务状态异常: taskId={}", taskId, e);
+            throw e;
+        }
+    }
+
     private String generateTaskId() {
         return "TASK_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }

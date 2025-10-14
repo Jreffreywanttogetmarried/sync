@@ -23,6 +23,7 @@ public class CrmApiService {
     
     private final WebClient webClient;
     private final RateLimiterService rateLimiterService;
+    private final DelayedRetryService delayedRetryService;
     
     /**
      * 提交客户数据到CRM
@@ -67,10 +68,21 @@ public class CrmApiService {
         } catch (WebClientResponseException e) {
             log.error("CRM API HTTP错误: cusName={}, status={}, body={}", 
                     request.getCusName(), e.getStatusCode(), e.getResponseBodyAsString(), e);
-            return CrmResponse.builder()
+            
+            // 检查是否为频率限制错误
+            CrmResponse errorResponse = CrmResponse.builder()
                     .code(e.getStatusCode().value())
                     .msg("HTTP错误: " + e.getMessage())
                     .build();
+            
+            // 如果是400错误且包含频率限制信息，标记为频率限制错误
+            if (e.getStatusCode().value() == 400 && 
+                (e.getResponseBodyAsString().contains("频率过高") || 
+                 e.getResponseBodyAsString().contains("稍后重试"))) {
+                errorResponse.setMsg("接口调用频率过高，请稍后重试");
+            }
+            
+            return errorResponse;
         } catch (Exception e) {
             log.error("CRM API调用异常: cusName={}", request.getCusName(), e);
             return CrmResponse.builder()
@@ -120,10 +132,21 @@ public class CrmApiService {
         } catch (WebClientResponseException e) {
             log.error("订单数据提交HTTP错误: title={}, status={}, body={}", 
                     request.getTitle(), e.getStatusCode(), e.getResponseBodyAsString(), e);
-            return CrmResponse.builder()
-                    .code(500)
+            
+            // 检查是否为频率限制错误
+            CrmResponse errorResponse = CrmResponse.builder()
+                    .code(e.getStatusCode().value())
                     .msg("HTTP错误: " + e.getMessage())
                     .build();
+            
+            // 如果是400错误且包含频率限制信息，标记为频率限制错误
+            if (e.getStatusCode().value() == 400 && 
+                (e.getResponseBodyAsString().contains("频率过高") || 
+                 e.getResponseBodyAsString().contains("稍后重试"))) {
+                errorResponse.setMsg("接口调用频率过高，请稍后重试");
+            }
+            
+            return errorResponse;
         } catch (Exception e) {
             log.error("订单数据提交异常: title={}", request.getTitle(), e);
             return CrmResponse.builder()

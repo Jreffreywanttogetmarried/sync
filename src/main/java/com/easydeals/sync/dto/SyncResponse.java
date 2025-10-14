@@ -46,6 +46,7 @@ public class SyncResponse {
     public static class FailedTask {
         private String businessId;
         private String reason;
+        private String dataType;
     }
     
     /**
@@ -54,7 +55,7 @@ public class SyncResponse {
     public static SyncResponse success(List<String> taskIds) {
         return SyncResponse.builder()
                 .code(200)
-                .message("提交成功")
+                .message("全部提交成功(未推送客户无忧)")
                 .successTaskIds(taskIds)
                 .build();
     }
@@ -65,7 +66,7 @@ public class SyncResponse {
     public static SyncResponse partialSuccess(List<String> successTaskIds, List<FailedTask> failedTasks) {
         return SyncResponse.builder()
                 .code(206)
-                .message("部分成功")
+                .message("部分提交成功(未推送客户无忧)")
                 .successTaskIds(successTaskIds)
                 .failedTasks(failedTasks)
                 .build();

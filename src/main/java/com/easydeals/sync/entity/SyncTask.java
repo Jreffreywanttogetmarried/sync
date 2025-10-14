@@ -1,5 +1,6 @@
 package com.easydeals.sync.entity;
 
+import com.easydeals.sync.enums.CallbackStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -75,6 +76,12 @@ public class SyncTask {
     private String errorMsg;
     
     /**
+     * 回调状态：0-未回调，1-已回调，2-回调失败
+     */
+    @Builder.Default
+    private Integer callbackStatus = CallbackStatusEnum.NOT_CALLED.getCode();
+    
+    /**
      * 创建时间
      */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -95,7 +102,9 @@ public class SyncTask {
         PENDING(0, "待处理"),
         PROCESSING(1, "处理中"),
         SUCCESS(2, "成功"),
-        FAILED(3, "失败");
+        FAILED(3, "失败"),
+        RETRYING(4, "重试中"),
+        DELAYED_RETRY(5, "延迟重试");
         
         private final int code;
         private final String description;

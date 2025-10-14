@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +27,8 @@ public class SyncProcessorService {
     private final SyncTaskService syncTaskService;
     private final CrmApiService crmApiService;
     private final ObjectMapper objectMapper;
+    private final CallbackService callbackService;
+    private final DelayedRetryService delayedRetryService;
     
     /**
      * 处理同步任务（支持自动实体类装配）
@@ -57,22 +60,50 @@ public class SyncProcessorService {
                 return;
             }
             
-            // 检查任务状态
-            if (task.getStatus() != SyncTask.Status.PENDING.getCode()) {
-                log.warn("任务状态不是待处理: taskId={}, status={}", taskId, task.getStatus());
+            // 检查任务状态 - 允许待处理、处理中、重试中和延迟重试状态
+            if (task.getStatus() != SyncTask.Status.PENDING.getCode() && 
+                task.getStatus() != SyncTask.Status.PROCESSING.getCode() &&
+                task.getStatus() != SyncTask.Status.RETRYING.getCode() &&
+                task.getStatus() != SyncTask.Status.DELAYED_RETRY.getCode()) {
+                log.warn("任务状态不允许处理: taskId={}, status={}", taskId, task.getStatus());
                 return;
             }
             
-            // 更新任务状态为处理中
-            syncTaskService.updateTaskToProcessing(taskId);
-            
+            // 根据当前状态决定如何更新状态
+            if (task.getStatus() == SyncTask.Status.PENDING.getCode()) {
+                // 首次处理，更新为处理中
+                syncTaskService.updateTaskToProcessing(taskId);
+            } else if (task.getStatus() == SyncTask.Status.PROCESSING.getCode()) {
+                // 第一次重试，更新为重试中
+                syncTaskService.updateTaskToRetrying(taskId);
+            }
+            // 如果已经是重试中状态，不需要更新状态
+
             // 根据数据类型自动装配和处理
             processTaskByDataType(task);
             
         } catch (Exception e) {
             log.error("处理同步任务异常: taskId={}", taskId, e);
-            syncTaskService.updateTaskToFailed(taskId, "处理异常: " + e.getMessage());
+            // 不在这里直接标记为失败，让Spring Retry处理重试
+            // 只有在@Recover方法中才最终标记为失败
             throw e; // 重新抛出异常以触发重试
+        }
+    }
+    
+    /**
+     * 重试失败后的恢复方法
+     * 当processTask方法重试3次都失败后，会调用此方法
+     */
+    @Recover
+    public void recoverProcessTask(Exception ex, String taskId) {
+        log.error("任务处理失败，已达到最大重试次数: taskId={}, error={}", taskId, ex.getMessage());
+        
+        try {
+            // 最终标记任务为失败
+            syncTaskService.updateTaskToFailedAfterReTry(taskId, "重试3次后失败: " + ex.getMessage());
+            
+        } catch (Exception e) {
+            log.error("恢复方法执行异常: taskId={}", taskId, e);
         }
     }
     
@@ -100,7 +131,7 @@ public class SyncProcessorService {
             log.info("数据类型处理完成: taskId={}, dataType={}", task.getTaskId(), task.getDataType());
             
         } catch (Exception e) {
-            log.error("数据类型处理异常: taskId={}, dataType={}", task.getTaskId(), task.getDataType(), e);
+//            log.error("数据类型处理异常: taskId={}, dataType={}", task.getTaskId(), task.getDataType(), e);
             throw e;
         }
     }
@@ -128,23 +159,40 @@ public class SyncProcessorService {
             CrmResponse crmResponse = crmApiService.submitCustomer(crmRequest);
             
             if (crmResponse != null && crmResponse.isSuccess()) {
-                // 保存CRM请求编码
+                // 保存CRM请求编码，等待执行结果查询
                 syncTaskService.updateTaskCrmRequestCode(task.getTaskId(), crmResponse.getRequestCode());
                 log.info("客户CRM API调用成功，等待执行结果: taskId={}, requestCode={}", 
                         task.getTaskId(), crmResponse.getRequestCode());
             } else {
-                // CRM API调用失败
+                // 检查是否为频率限制错误
+                if (crmResponse != null && 
+                    delayedRetryService.isRateLimitError(crmResponse.getCode(), crmResponse.getMsg())) {
+                    
+                    // 频率限制错误，加入延迟重试队列
+                    int delayMinutes = delayedRetryService.calculateDelayMinutes(task.getRetryCount());
+                    delayedRetryService.addToDelayedRetryQueue(task.getTaskId(), delayMinutes);
+                    
+                    log.warn("客户CRM API频率限制，已加入延迟重试队列: taskId={}, delayMinutes={}", 
+                            task.getTaskId(), delayMinutes);
+                    return; // 不抛出异常，避免触发Spring Retry
+                }
+                
+                // 其他错误，抛出异常让重试机制处理
                 String errorMsg = String.format("客户CRM API调用失败: code=%d, msg=%s", 
-                        crmResponse != null ? crmResponse.getCode() : -1, 
+                        crmResponse != null ? crmResponse.getCode() : -1,
                         crmResponse != null ? crmResponse.getMsg() : "响应为空");
-                syncTaskService.updateTaskToFailed(task.getTaskId(), errorMsg);
                 log.error("客户CRM API调用失败: taskId={}, {}", task.getTaskId(), errorMsg);
+                throw new RuntimeException(errorMsg);
             }
             
         } catch (Exception e) {
-            log.error("处理客户任务异常: taskId={}, 异常详情: ", task.getTaskId(), e);
-            syncTaskService.updateTaskToFailed(task.getTaskId(), "处理客户任务异常: " + e.getMessage());
-            throw e; // 重新抛出异常以触发重试
+//            log.error("处理客户任务异常: taskId={}, 异常详情: ", task.getTaskId(), e);
+            
+            // 不在这里发送失败回调，让Spring Retry重试
+            // 只有在最终失败时才在@Recover方法中发送失败回调
+            
+            // 重新抛出异常以触发重试机制
+            throw e;
         }
     }
     
@@ -176,25 +224,42 @@ public class SyncProcessorService {
                 log.info("订单CRM API调用成功，等待执行结果: taskId={}, requestCode={}", 
                         task.getTaskId(), crmResponse.getRequestCode());
             } else {
-                // CRM API调用失败
+                // 检查是否为频率限制错误
+                if (crmResponse != null && 
+                    delayedRetryService.isRateLimitError(crmResponse.getCode(), crmResponse.getMsg())) {
+                    
+                    // 频率限制错误，加入延迟重试队列
+                    int delayMinutes = delayedRetryService.calculateDelayMinutes(task.getRetryCount());
+                    delayedRetryService.addToDelayedRetryQueue(task.getTaskId(), delayMinutes);
+                    
+                    log.warn("订单CRM API频率限制，已加入延迟重试队列: taskId={}, delayMinutes={}", 
+                            task.getTaskId(), delayMinutes);
+                    return; // 不抛出异常，避免触发Spring Retry
+                }
+                
+                // 其他错误，抛出异常让重试机制处理
                 String errorMsg = String.format("订单CRM API调用失败: code=%d, msg=%s", 
                         crmResponse != null ? crmResponse.getCode() : -1, 
                         crmResponse != null ? crmResponse.getMsg() : "响应为空");
-                syncTaskService.updateTaskToFailed(task.getTaskId(), errorMsg);
                 log.error("订单CRM API调用失败: taskId={}, {}", task.getTaskId(), errorMsg);
+                throw new RuntimeException(errorMsg);
             }
             
         } catch (Exception e) {
-            log.error("处理订单任务异常: taskId={}, 异常详情: ", task.getTaskId(), e);
-            syncTaskService.updateTaskToFailed(task.getTaskId(), "处理订单任务异常: " + e.getMessage());
-            throw e; // 重新抛出异常以触发重试
+//            log.error("处理订单任务异常: taskId={}", task.getTaskId(), e);
+            
+            // 不在这里发送失败回调，让Spring Retry重试
+            // 只有在最终失败时才在@Recover方法中发送失败回调
+            
+            // 重新抛出异常以触发重试机制
+            throw e;
         }
     }
     
     /**
      * 转换为订单CRM请求格式
      */
-    private OrderCrmRequest convertToOrderCrmRequest(Object orderData) {
+    public OrderCrmRequest convertToOrderCrmRequest(Object orderData) {
         try {
             log.debug("开始转换订单CRM请求: orderData={}", orderData);
             
@@ -236,6 +301,7 @@ public class SyncProcessorService {
             Object shippingMethod = getFieldValue(orderData, "shippingMethod");
             
             Object ip = getFieldValue(orderData, "ip");
+            Object productOptions = getFieldValue(orderData, "productOptions");
             Object dealProductList = getFieldValue(orderData, "dealProductList");
             
             log.debug("订单字段值获取结果: title={}, cusName={}, dealAmount={}, dealTime={}", 
@@ -253,7 +319,8 @@ public class SyncProcessorService {
             if (uploadFile != null) builder.uploadFile(uploadFile.toString());
             if (website != null) builder.website(website.toString());
             if (ip != null) builder.ip(ip.toString());
-            
+            if (productOptions != null) builder.productOptions(productOptions.toString());
+
             // 处理金额字段
             if (dealAmount != null) {
                 if (dealAmount instanceof java.math.BigDecimal) {
@@ -419,7 +486,7 @@ public class SyncProcessorService {
             throw new RuntimeException("转换订单产品失败: " + e.getMessage(), e);
         }
     }
-    private CustomerCrmRequest convertToCustomerCrmRequest(Object customerData) {
+    public CustomerCrmRequest convertToCustomerCrmRequest(Object customerData) {
         try {
             log.debug("开始转换CRM请求: customerData={}", customerData);
             

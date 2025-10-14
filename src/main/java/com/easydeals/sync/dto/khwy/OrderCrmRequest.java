@@ -199,6 +199,12 @@ public class OrderCrmRequest {
      */
     @JsonProperty("ip")
     private String ip;
+
+    /**
+     * 购买产品的选项
+     */
+    @JsonProperty("product_options")
+    private String productOptions;
     
     /**
      * 成交产品列表

@@ -161,7 +161,13 @@ public class OrderData {
      */
     @JsonProperty("ip")
     private String ip;
-    
+
+    /**
+     * 购买产品的选项
+     */
+    @JsonProperty("productOptions")
+    private String productOptions;
+
     /**
      * 订单产品列表
      */
