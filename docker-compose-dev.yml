@@ -59,6 +59,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - TZ=Asia/Shanghai
+    user: root
     depends_on:
       sync-test-mysql:
         condition: service_healthy

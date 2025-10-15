@@ -31,17 +31,11 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # 安装curl用于健康检查
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# 创建应用用户
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
 # 从构建阶段复制jar文件
 COPY --from=builder /app/target/sync-*.jar app.jar
 
-# 创建日志目录并设置权限
-RUN mkdir -p /app/logs && chown -R appuser:appuser /app
-
-# 切换到应用用户
-USER appuser
+# 创建日志目录
+RUN mkdir -p /app/logs
 
 # 暴露应用端口
 EXPOSE 8061
