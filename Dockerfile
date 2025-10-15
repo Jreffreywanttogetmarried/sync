@@ -19,7 +19,7 @@ COPY src src
 RUN mvn clean package -DskipTests -B
 
 # 多阶段构建 - 第二阶段：运行时镜像
-FROM openjdk:21
+FROM openjdk:21-jdk-slim
 
 # 设置工作目录
 WORKDIR /app
