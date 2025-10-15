@@ -14,7 +14,7 @@ services:
     ports:
       - "3308:3306"  # 映射到宿主机3308端口避免冲突
     volumes:
-      - mysql_data:/var/lib/mysql
+      - ./data/mysql:/var/lib/mysql
       - ./src/main/resources/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
     command: --default-authentication-plugin=mysql_native_password
@@ -34,7 +34,7 @@ services:
     ports:
       - "6380:6379"  # 映射到宿主机6380端口避免冲突
     volumes:
-      - redis_data:/data
+      - ./data/redis:/data
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     command: redis-server /usr/local/etc/redis/redis.conf
     networks:
@@ -55,7 +55,7 @@ services:
     ports:
       - "8061:8061"
     volumes:
-      - app_logs:/app/logs
+      - ./data/logs:/app/logs
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - TZ=Asia/Shanghai
@@ -79,14 +79,8 @@ networks:
     driver: bridge
     name: sync-test-network
 
-# 数据卷配置
-volumes:
-  mysql_data:
-    name: sync-test-mysql-data
-    driver: local
-  redis_data:
-    name: sync-test-redis-data
-    driver: local
-  app_logs:
-    name: sync-test-app-logs
-    driver: local
+# 注意：现在使用本地目录挂载，不再需要命名数据卷
+# 请确保在项目根目录下创建以下目录：
+# - data/mysql (MySQL数据存储)
+# - data/redis (Redis数据存储) 
+# - data/logs (应用日志存储)
