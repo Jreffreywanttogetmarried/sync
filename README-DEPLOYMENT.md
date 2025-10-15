@@ -71,6 +71,22 @@ npm run docker:down     # 停止所有服务
 npm run docker:restart  # 重启所有服务
 ```
 
+### 发版和服务管理
+```bash
+# 🔄 发版操作
+npm run docker:redeploy  # 一键重新部署新版本（推荐）
+npm run deploy          # 完整重新部署
+
+# 🛑 关闭服务
+npm run docker:stop     # 停止服务（保留数据）
+npm run docker:down     # 关闭服务（删除容器，保留数据）
+npm run docker:clean    # 完全清理（删除容器、镜像、数据）
+
+# 📊 服务监控
+npm run docker:status   # 查看服务状态
+npm run health:check    # 检查应用健康状态
+```
+
 ### 监控相关
 ```bash
 npm run docker:status  # 查看容器状态

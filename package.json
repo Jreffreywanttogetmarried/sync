@@ -4,20 +4,26 @@
   "description": "Sync application dev environment deployment scripts",
   "scripts": {
     "deploy": "npm run docker:deploy",
+    "build:local": "./mvnw clean package -DskipTests",
     "docker:build": "docker-compose -f docker-compose-dev.yml build --no-cache",
+    "docker:build:fallback": "npm run build:local && cp Dockerfile.fallback Dockerfile && npm run docker:build && cp Dockerfile.fallback.bak Dockerfile",
     "docker:up": "docker-compose -f docker-compose-dev.yml up -d",
     "docker:down": "docker-compose -f docker-compose-dev.yml down",
+    "docker:stop": "docker-compose -f docker-compose-dev.yml stop",
     "docker:restart": "npm run docker:down && npm run docker:up",
     "docker:deploy": "npm run docker:down && npm run docker:build && npm run docker:up",
+    "docker:deploy:fallback": "npm run docker:down && npm run docker:build:fallback && npm run docker:up",
+    "docker:redeploy": "echo 'Starting redeploy...' && npm run docker:stop && npm run docker:build && npm run docker:up && echo 'Redeploy completed!'",
     "docker:logs": "docker-compose -f docker-compose-dev.yml logs -f",
     "docker:logs:app": "docker-compose -f docker-compose-dev.yml logs -f sync-test-app",
     "docker:logs:mysql": "docker-compose -f docker-compose-dev.yml logs -f sync-test-mysql",
     "docker:logs:redis": "docker-compose -f docker-compose-dev.yml logs -f sync-test-redis",
     "docker:status": "docker-compose -f docker-compose-dev.yml ps",
     "docker:clean": "docker-compose -f docker-compose-dev.yml down -v --rmi all",
+    "docker:clean:all": "npm run docker:clean && docker system prune -f",
     "health:check": "curl -f http://localhost:8061/actuator/health || echo 'Application not ready yet'",
     "db:init": "docker-compose -f docker-compose-dev.yml exec sync-test-mysql mysql -u root -p123456 sync_test < /docker-entrypoint-initdb.d/01-schema.sql",
-    "help": "echo 'Available commands: deploy, docker:build, docker:up, docker:down, docker:restart, docker:logs, docker:status, docker:clean, health:check'"
+    "help": "echo 'Available commands: deploy, docker:stop, docker:redeploy, docker:build, docker:up, docker:down, docker:restart, docker:logs, docker:status, docker:clean, health:check, docker:deploy:fallback'"
   },
   "keywords": [
     "docker",
