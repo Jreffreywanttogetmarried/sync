@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "description": "Sync application dev environment deployment scripts",
   "scripts": {
-    "deploy": "npm run build && npm run docker:deploy",
-    "build": "mvn clean package -DskipTests",
+    "deploy": "npm run docker:deploy",
     "docker:build": "docker-compose -f docker-compose-dev.yml build --no-cache",
     "docker:up": "docker-compose -f docker-compose-dev.yml up -d",
     "docker:down": "docker-compose -f docker-compose-dev.yml down",
@@ -18,7 +17,7 @@
     "docker:clean": "docker-compose -f docker-compose-dev.yml down -v --rmi all",
     "health:check": "curl -f http://localhost:8061/actuator/health || echo 'Application not ready yet'",
     "db:init": "docker-compose -f docker-compose-dev.yml exec sync-test-mysql mysql -u root -p123456 sync_test < /docker-entrypoint-initdb.d/01-schema.sql",
-    "help": "echo 'Available commands: deploy, build, docker:up, docker:down, docker:restart, docker:logs, docker:status, docker:clean, health:check'"
+    "help": "echo 'Available commands: deploy, docker:build, docker:up, docker:down, docker:restart, docker:logs, docker:status, docker:clean, health:check'"
   },
   "keywords": [
     "docker",

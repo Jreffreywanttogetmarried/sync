@@ -2,13 +2,13 @@
 
 ## 概述
 本项目使用Docker Compose管理dev测试环境的容器化部署，包含Spring Boot应用、MySQL数据库和Redis缓存服务。
+**无需在服务器上安装Maven和JDK**，所有构建过程都在Docker容器内完成。
 
 ## 系统要求
 - Linux服务器（4核心4G内存）
 - Docker 20.0+
 - Docker Compose 2.0+
 - Node.js 14+ 和 npm 6+（用于执行部署脚本）
-- Maven 3.6+（用于构建Java应用）
 
 ## 服务架构
 ```
@@ -27,35 +27,48 @@
 
 ## 配置文件
 - **docker-compose-dev.yml**: Dev环境的Docker Compose配置文件
-- **Dockerfile**: Spring Boot应用的Docker镜像构建文件
+- **Dockerfile**: Spring Boot应用的Docker镜像构建文件（多阶段构建）
 
 ## 快速部署
 
 ### 1. 一键部署（推荐）
 ```bash
-# 执行完整部署流程：构建 -> 打包 -> 部署
+# 执行完整部署流程：Docker构建 -> 部署
 npm run deploy
 ```
 
 ### 2. 分步部署
 ```bash
-# 1. 构建Java应用
-npm run build
+# 1. 构建Docker镜像（包含Maven构建）
+npm run docker:build
 
-# 2. 构建Docker镜像并启动服务
-npm run docker:deploy
+# 2. 启动所有服务
+npm run docker:up
 ```
+
+## Docker多阶段构建说明
+
+本项目使用Docker多阶段构建技术：
+
+### 第一阶段：Maven构建
+- 使用 `maven:3.9.6-openjdk-21-slim` 镜像
+- 在容器内完成Java应用的编译和打包
+- 利用Docker缓存层优化构建速度
+
+### 第二阶段：运行时镜像
+- 使用 `openjdk:21-jdk-slim` 镜像
+- 只包含运行时必需的文件
+- 镜像体积更小，安全性更高
 
 ## 常用命令
 
 ### 部署相关
 ```bash
 npm run deploy          # 完整部署流程
-npm run build          # 仅构建Java应用
-npm run docker:build   # 构建Docker镜像
-npm run docker:up      # 启动所有服务
-npm run docker:down    # 停止所有服务
-npm run docker:restart # 重启所有服务
+npm run docker:build    # 构建Docker镜像（包含Maven构建）
+npm run docker:up       # 启动所有服务
+npm run docker:down     # 停止所有服务
+npm run docker:restart  # 重启所有服务
 ```
 
 ### 监控相关
