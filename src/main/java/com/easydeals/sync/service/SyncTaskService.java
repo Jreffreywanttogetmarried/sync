@@ -52,7 +52,9 @@ public class SyncTaskService {
             if (!DataTypeEnum.isSupported(request.getDataType())) {
                 return SyncResponse.error("不支持的数据类型: " + request.getDataType());
             }
-            
+
+            String dataType = request.getDataType();
+
             // 1. 先创建一个临时批次记录（totalCount暂时设为0）
             SyncBatch batch = syncBatchService.createBatch(
                     request.getWebsiteCode(), 
@@ -72,7 +74,8 @@ public class SyncTaskService {
                     SyncTask existingTask = syncTaskMapper.findByWebsiteCodeAndBusinessIdAndStatus(
                             request.getWebsiteCode(), 
                             businessId, 
-                            SyncTask.Status.SUCCESS.getCode()
+                            SyncTask.Status.SUCCESS.getCode(),
+                            dataType
                     );
                     
                     if (existingTask != null) {

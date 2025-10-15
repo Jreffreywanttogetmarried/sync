@@ -24,15 +24,15 @@ public class DelayedRetryScheduler {
     
     /**
      * 定期处理延迟重试队列中的任务
-     * 每30秒执行一次
+     * 每60秒执行一次
      */
-    @Scheduled(fixedDelay = 30000)
+    @Scheduled(fixedDelay = 60000)
     public void processDelayedRetryTasks() {
         try {
             RQueue<String> delayedRetryQueue = redissonClient.getQueue(DELAYED_RETRY_QUEUE);
             
-            // 批量处理延迟重试任务，每次最多处理10个
-            int batchSize = 10;
+            // 批量处理延迟重试任务，每次最多处理5个
+            int batchSize = 5;
             int processedCount = 0;
             
             for (int i = 0; i < batchSize; i++) {

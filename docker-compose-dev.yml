@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # MySQL数据库服务
+  sync-test-mysql:
+    image: mysql:8.0
+    container_name: sync-test-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: sync_test
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+      TZ: Asia/Shanghai
+    ports:
+      - "3307:3306"  # 映射到宿主机3307端口避免冲突
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./src/main/resources/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - sync-test-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+
+  # Redis缓存服务
+  sync-test-redis:
+    image: redis:7-alpine
+    container_name: sync-test-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"  # 映射到宿主机6380端口避免冲突
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - sync-test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 3s
+      retries: 5
+      interval: 5s
+
+  # Spring Boot应用服务
+  sync-test-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sync-test-app
+    restart: unless-stopped
+    ports:
+      - "8061:8061"
+    volumes:
+      - app_logs:/app/logs
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - TZ=Asia/Shanghai
+    depends_on:
+      sync-test-mysql:
+        condition: service_healthy
+      sync-test-redis:
+        condition: service_healthy
+    networks:
+      - sync-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8061/actuator/health"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
+
+# 网络配置
+networks:
+  sync-test-network:
+    driver: bridge
+    name: sync-test-network
+
+# 数据卷配置
+volumes:
+  mysql_data:
+    name: sync-test-mysql-data
+    driver: local
+  redis_data:
+    name: sync-test-redis-data
+    driver: local
+  app_logs:
+    name: sync-test-app-logs
+    driver: local

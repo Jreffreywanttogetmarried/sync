@@ -1,0 +1,37 @@
+{
+  "name": "sync-dev-deployment",
+  "version": "1.0.0",
+  "description": "Sync application dev environment deployment scripts",
+  "scripts": {
+    "deploy": "npm run build && npm run docker:deploy",
+    "build": "mvn clean package -DskipTests",
+    "docker:build": "docker-compose -f docker-compose-dev.yml build --no-cache",
+    "docker:up": "docker-compose -f docker-compose-dev.yml up -d",
+    "docker:down": "docker-compose -f docker-compose-dev.yml down",
+    "docker:restart": "npm run docker:down && npm run docker:up",
+    "docker:deploy": "npm run docker:down && npm run docker:build && npm run docker:up",
+    "docker:logs": "docker-compose -f docker-compose-dev.yml logs -f",
+    "docker:logs:app": "docker-compose -f docker-compose-dev.yml logs -f sync-test-app",
+    "docker:logs:mysql": "docker-compose -f docker-compose-dev.yml logs -f sync-test-mysql",
+    "docker:logs:redis": "docker-compose -f docker-compose-dev.yml logs -f sync-test-redis",
+    "docker:status": "docker-compose -f docker-compose-dev.yml ps",
+    "docker:clean": "docker-compose -f docker-compose-dev.yml down -v --rmi all",
+    "health:check": "curl -f http://localhost:8061/actuator/health || echo 'Application not ready yet'",
+    "db:init": "docker-compose -f docker-compose-dev.yml exec sync-test-mysql mysql -u root -p123456 sync_test < /docker-entrypoint-initdb.d/01-schema.sql",
+    "help": "echo 'Available commands: deploy, build, docker:up, docker:down, docker:restart, docker:logs, docker:status, docker:clean, health:check'"
+  },
+  "keywords": [
+    "docker",
+    "spring-boot",
+    "mysql",
+    "redis",
+    "deployment"
+  ],
+  "author": "Development Team",
+  "license": "ISC",
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  }
+}

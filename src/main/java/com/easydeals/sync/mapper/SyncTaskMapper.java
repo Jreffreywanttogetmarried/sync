@@ -50,10 +50,11 @@ public interface SyncTaskMapper {
     /**
      * 根据网站代码和业务ID查询已成功的任务
      */
-    @Select("SELECT * FROM sync_task WHERE website_code = #{websiteCode} AND business_id = #{businessId} AND status = #{status} LIMIT 1")
+    @Select("SELECT * FROM sync_task WHERE website_code = #{websiteCode} AND business_id = #{businessId} AND status = #{status} AND data_type = #{dataType} LIMIT 1")
     SyncTask findByWebsiteCodeAndBusinessIdAndStatus(@Param("websiteCode") String websiteCode,
                                                      @Param("businessId") String businessId,
-                                                     @Param("status") Integer status);
+                                                     @Param("status") Integer status,
+                                                     @Param("dataType") String dataType);
 
     /**
      * 根据状态查询任务列表
