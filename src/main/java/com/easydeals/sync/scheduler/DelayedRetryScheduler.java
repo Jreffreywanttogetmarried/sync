@@ -26,7 +26,7 @@ public class DelayedRetryScheduler {
      * 定期处理延迟重试队列中的任务
      * 每60秒执行一次
      */
-    @Scheduled(fixedDelay = 60000)
+    @Scheduled(fixedDelay = 30000)
     public void processDelayedRetryTasks() {
         try {
             RQueue<String> delayedRetryQueue = redissonClient.getQueue(DELAYED_RETRY_QUEUE);
@@ -47,7 +47,9 @@ public class DelayedRetryScheduler {
                     // 使用独立的延迟重试处理器处理任务
                     delayedRetryProcessor.processDelayedRetryTask(taskId);
                     processedCount++;
-                    
+
+                    // 等待2秒
+                    Thread.sleep(2000);
                 } catch (Exception e) {
                     log.error("处理延迟重试任务异常: taskId={}", taskId, e);
                     // 继续处理下一个任务，不中断整个批次

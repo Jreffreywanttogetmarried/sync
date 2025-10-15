@@ -4,7 +4,7 @@ services:
   sync-test-mysql:
     image: mysql:8.0
     container_name: sync-test-mysql
-    restart: unless-stopped
+    restart: on-failure:3  # 失败时最多重启3次
     environment:
       MYSQL_ROOT_PASSWORD: 123456
       MYSQL_DATABASE: sync_test
@@ -20,17 +20,30 @@ services:
     command: --default-authentication-plugin=mysql_native_password
     networks:
       - sync-test-network
+    # 资源限制配置
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G     # 限制内存使用1.5GB
+        reservations:
+          memory: 512M     # 保留512MB内存
+      restart_policy:
+        condition: on-failure
+        delay: 10s         # 重启延迟10秒
+        max_attempts: 3    # 最多重启3次
+        window: 120s       # 监控窗口2分钟
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
       timeout: 20s
-      retries: 10
-      interval: 10s
+      retries: 5         # 减少重试次数
+      interval: 15s      # 增加检查间隔
+      start_period: 30s  # 启动等待期
 
   # Redis缓存服务
   sync-test-redis:
     image: redis:7-alpine
     container_name: sync-test-redis
-    restart: unless-stopped
+    restart: on-failure:3  # 失败时最多重启3次
     ports:
       - "6380:6379"  # 映射到宿主机6380端口避免冲突
     volumes:
@@ -39,11 +52,24 @@ services:
     command: redis-server /usr/local/etc/redis/redis.conf
     networks:
       - sync-test-network
+    # 资源限制配置
+    deploy:
+      resources:
+        limits:
+          memory: 512M     # 限制内存使用512MB (与redis.conf中maxmemory一致)
+        reservations:
+          memory: 256M     # 保留256MB内存
+      restart_policy:
+        condition: on-failure
+        delay: 5s          # 重启延迟5秒
+        max_attempts: 3    # 最多重启3次
+        window: 60s        # 监控窗口1分钟
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       timeout: 3s
-      retries: 5
-      interval: 5s
+      retries: 3         # 减少重试次数
+      interval: 10s      # 增加检查间隔
+      start_period: 10s  # 启动等待期
 
   # Spring Boot应用服务
   sync-test-app:
@@ -51,7 +77,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: sync-test-app
-    restart: unless-stopped
+    restart: on-failure:5  # 应用服务允许更多重启次数
     ports:
       - "8061:8061"
     volumes:
@@ -59,7 +85,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - TZ=Asia/Shanghai
-    user: root
+      # JVM内存配置，确保不超过容器限制
+      - JAVA_OPTS=-Xms512m -Xmx1536m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
     depends_on:
       sync-test-mysql:
         condition: service_healthy
@@ -67,12 +94,24 @@ services:
         condition: service_healthy
     networks:
       - sync-test-network
+    # 资源限制配置
+    deploy:
+      resources:
+        limits:
+          memory: 2G       # 限制内存使用2GB
+        reservations:
+          memory: 1G       # 保留1GB内存
+      restart_policy:
+        condition: on-failure
+        delay: 15s         # 重启延迟15秒，给应用更多启动时间
+        max_attempts: 5    # 最多重启5次
+        window: 300s       # 监控窗口5分钟
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8061/actuator/health"]
-      timeout: 10s
-      retries: 5
-      interval: 30s
-      start_period: 60s
+      timeout: 15s       # 增加超时时间
+      retries: 3         # 减少重试次数
+      interval: 45s      # 增加检查间隔
+      start_period: 90s  # 增加启动等待期
 
 # 网络配置
 networks:
