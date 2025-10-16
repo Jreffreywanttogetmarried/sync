@@ -302,6 +302,7 @@ public class SyncProcessorService {
             
             Object ip = getFieldValue(orderData, "ip");
             Object productOptions = getFieldValue(orderData, "productOptions");
+            Object orderTelephone = getFieldValue(orderData, "orderTelephone");
             Object dealProductList = getFieldValue(orderData, "dealProductList");
             
             log.debug("订单字段值获取结果: title={}, cusName={}, dealAmount={}, dealTime={}", 
@@ -320,6 +321,7 @@ public class SyncProcessorService {
             if (website != null) builder.website(website.toString());
             if (ip != null) builder.ip(ip.toString());
             if (productOptions != null) builder.productOptions(productOptions.toString());
+            if (orderTelephone != null) builder.orderTelephone(orderTelephone.toString());
 
             // 处理金额字段
             if (dealAmount != null) {

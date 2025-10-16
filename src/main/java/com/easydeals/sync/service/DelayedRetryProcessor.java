@@ -102,8 +102,8 @@ public class DelayedRetryProcessor {
             // 转换为CRM请求格式（复用原有逻辑）
             CustomerCrmRequest crmRequest = syncProcessorService.convertToCustomerCrmRequest(customerData);
             
-            // 调用CRM API
-            CrmResponse crmResponse = crmApiService.submitCustomer(crmRequest);
+            // 调用延迟队列专用的CRM API
+            CrmResponse crmResponse = crmApiService.submitCustomerFromDelayedQueue(crmRequest);
             
             if (crmResponse != null && crmResponse.isSuccess()) {
                 // 成功：更新状态为PROCESSING，清除错误信息，保存CRM请求编码
@@ -141,8 +141,8 @@ public class DelayedRetryProcessor {
             // 转换为CRM请求格式（复用原有逻辑）
             OrderCrmRequest crmRequest = syncProcessorService.convertToOrderCrmRequest(orderData);
             
-            // 调用CRM API
-            CrmResponse crmResponse = crmApiService.submitOrder(crmRequest);
+            // 调用延迟队列专用的CRM API
+            CrmResponse crmResponse = crmApiService.submitOrderFromDelayedQueue(crmRequest);
             
             if (crmResponse != null && crmResponse.isSuccess()) {
                 // 成功：更新状态为PROCESSING，清除错误信息，保存CRM请求编码

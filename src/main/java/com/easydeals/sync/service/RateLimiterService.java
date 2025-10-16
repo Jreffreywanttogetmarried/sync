@@ -24,76 +24,99 @@ public class RateLimiterService {
     
     // CRM接口调用频率限制：每分钟40次
     private static final int MAX_CALLS_PER_MINUTE = 40;
+    // 为延迟队列预留的调用额度（总额度的25%）
+    private static final int RESERVED_CALLS_FOR_DELAYED_QUEUE = 10;
+    // 正常队列的最大调用次数（总额度的75%）
+    private static final int MAX_CALLS_FOR_NORMAL_QUEUE = MAX_CALLS_PER_MINUTE - RESERVED_CALLS_FOR_DELAYED_QUEUE;
     private static final String RATE_LIMIT_KEY_PREFIX = "crm:rate_limit:";
     
     /**
-     * 检查是否可以进行CRM接口调用
-     * 如果超过限制，会自动等待直到可以调用
+     * 尝试获取调用许可
      * 
-     * @param apiType API类型（customer或order）
-     * @return true表示可以调用，false表示需要等待
+     * @param apiType API类型
+     * @return 是否成功获取许可
      */
     public boolean tryAcquire(String apiType) {
+        return tryAcquire(apiType, false);
+    }
+    
+    /**
+     * 尝试获取调用许可（支持延迟队列优先级）
+     * 
+     * @param apiType API类型
+     * @param isDelayedQueue 是否为延迟队列调用
+     * @return 是否成功获取许可
+     */
+    public boolean tryAcquire(String apiType, boolean isDelayedQueue) {
         String currentMinute = getCurrentMinuteKey();
         String rateLimitKey = RATE_LIMIT_KEY_PREFIX + apiType + ":" + currentMinute;
         
         RAtomicLong counter = redissonClient.getAtomicLong(rateLimitKey);
         
-        // 原子性增加计数
-        long newCount = counter.incrementAndGet();
+        // 设置过期时间为2分钟，确保key会被自动清理
+        counter.expire(Duration.ofMinutes(2));
         
-        // 如果是第一次创建这个key（计数为1），设置过期时间
-        if (newCount == 1) {
-            counter.expire(Duration.ofSeconds(120));
-            log.debug("设置新的限流key过期时间: key={}, ttl=120秒", rateLimitKey);
-        }
+        long currentCount = counter.get();
         
-        if (newCount > MAX_CALLS_PER_MINUTE) {
-            // 如果增加后超过限制，需要减回去
-            counter.decrementAndGet();
-            log.warn("CRM接口调用频率达到限制: apiType={}, attemptedCount={}, limit={}", 
-                    apiType, newCount, MAX_CALLS_PER_MINUTE);
-            return false;
-        }
-        
-        log.debug("CRM接口调用计数: apiType={}, currentCount={}, limit={}", 
-                apiType, newCount, MAX_CALLS_PER_MINUTE);
-        
-        return true;
-    }
-    
-    /**
-     * 等待直到可以进行API调用
-     * 使用智能等待策略，避免长时间阻塞
-     * 
-     * @param apiType API类型
-     * @throws InterruptedException 如果等待被中断
-     */
-    public void waitForAvailableSlot(String apiType) throws InterruptedException {
-        int maxWaitSeconds = 70; // 最多等待70秒（超过一分钟窗口）
-        int waitInterval = 1000; // 每次等待1秒
-        int totalWaitTime = 0;
-        
-        while (!tryAcquire(apiType) && totalWaitTime < maxWaitSeconds * 1000) {
-            log.info("CRM接口调用频率限制，等待中: apiType={}, waitTime={}ms", apiType, totalWaitTime);
-            
-            Thread.sleep(waitInterval);
-            totalWaitTime += waitInterval;
-            
-            // 动态调整等待间隔，接近分钟边界时等待时间更短
-            int secondsInMinute = LocalDateTime.now().getSecond();
-            if (secondsInMinute > 50) {
-                // 接近分钟结束，缩短等待间隔
-                waitInterval = 500;
-            } else {
-                waitInterval = 1000;
+        // 根据调用类型选择不同的限制策略
+        if (isDelayedQueue) {
+            // 延迟队列：只要总调用次数未达到上限就允许
+            if (currentCount < MAX_CALLS_PER_MINUTE) {
+                counter.incrementAndGet();
+                log.debug("延迟队列获取调用许可成功，当前调用次数: {}/{}", currentCount + 1, MAX_CALLS_PER_MINUTE);
+                return true;
+            }
+        } else {
+            // 正常队列：限制在预留额度内
+            if (currentCount < MAX_CALLS_FOR_NORMAL_QUEUE) {
+                counter.incrementAndGet();
+                log.debug("正常队列获取调用许可成功，当前调用次数: {}/{}", currentCount + 1, MAX_CALLS_FOR_NORMAL_QUEUE);
+                return true;
             }
         }
         
-        if (totalWaitTime >= maxWaitSeconds * 1000) {
-            log.error("CRM接口调用频率限制等待超时: apiType={}, maxWaitTime={}s", apiType, maxWaitSeconds);
-            throw new RuntimeException("CRM接口调用频率限制等待超时");
+        log.debug("获取调用许可失败，当前调用次数: {}, 队列类型: {}", currentCount, isDelayedQueue ? "延迟队列" : "正常队列");
+        return false;
+    }
+    
+    /**
+     * 等待可用的调用时机（支持延迟队列优先级）
+     * 
+     * @param apiType API类型
+     * @param isDelayedQueue 是否为延迟队列调用
+     * @throws InterruptedException 等待被中断
+     */
+    public void waitForAvailableSlot(String apiType, boolean isDelayedQueue) throws InterruptedException {
+        int maxWaitTime = 65; // 最大等待65秒（稍微超过一分钟）
+        int waitTime = 0;
+        
+        while (waitTime < maxWaitTime) {
+            if (tryAcquire(apiType, isDelayedQueue)) {
+                log.debug("等待{}秒后获取到调用许可: apiType={}, 队列类型={}", 
+                        waitTime, apiType, isDelayedQueue ? "延迟队列" : "正常队列");
+                return;
+            }
+            
+            // 延迟队列使用更短的等待间隔
+            int sleepInterval = isDelayedQueue ? 2 : 5;
+            Thread.sleep(sleepInterval * 1000);
+            waitTime += sleepInterval;
+            
+            log.debug("等待调用许可: apiType={}, 已等待{}秒, 队列类型={}", apiType, waitTime, isDelayedQueue ? "延迟队列" : "正常队列");
         }
+        
+        log.warn("等待调用许可超时: apiType={}, 等待时间={}秒, 队列类型={}", apiType, waitTime, isDelayedQueue ? "延迟队列" : "正常队列");
+        throw new RuntimeException("CRM接口调用频率限制等待超时");
+    }
+    
+    /**
+     * 等待可用的调用时机（兼容原有接口）
+     * 
+     * @param apiType API类型
+     * @throws InterruptedException 等待被中断
+     */
+    public void waitForAvailableSlot(String apiType) throws InterruptedException {
+        waitForAvailableSlot(apiType, false);
     }
     
     /**
@@ -122,10 +145,27 @@ public class RateLimiterService {
      * 获取剩余可用调用次数
      * 
      * @param apiType API类型
+     * @param isDelayedQueue 是否为延迟队列调用
+     * @return 剩余可用调用次数
+     */
+    public long getRemainingCalls(String apiType, boolean isDelayedQueue) {
+        long currentCount = getCurrentCallCount(apiType);
+        if (isDelayedQueue) {
+            // 延迟队列：基于总额度计算
+            return Math.max(0, MAX_CALLS_PER_MINUTE - currentCount);
+        } else {
+            // 正常队列：基于预留额度计算
+            return Math.max(0, MAX_CALLS_FOR_NORMAL_QUEUE - currentCount);
+        }
+    }
+    
+    /**
+     * 获取剩余可用调用次数（兼容原有接口）
+     * 
+     * @param apiType API类型
      * @return 剩余可用调用次数
      */
     public long getRemainingCalls(String apiType) {
-        long currentCount = getCurrentCallCount(apiType);
-        return Math.max(0, MAX_CALLS_PER_MINUTE - currentCount);
+        return getRemainingCalls(apiType, false);
     }
 }

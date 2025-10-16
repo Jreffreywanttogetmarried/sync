@@ -169,6 +169,12 @@ public class OrderData {
     private String productOptions;
 
     /**
+     * 订单记录的手机号
+     */
+    @JsonProperty("orderTelephone")
+    private String orderTelephone;
+
+    /**
      * 订单产品列表
      */
     @JsonProperty("dealProductList")

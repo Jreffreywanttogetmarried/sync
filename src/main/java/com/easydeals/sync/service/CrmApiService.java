@@ -157,8 +157,134 @@ public class CrmApiService {
     }
     
     /**
-     * 查询CRM执行结果
+     * 提交客户数据到CRM（延迟队列专用）
      */
+    @Retryable(value = {Exception.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000),
+               exclude = {WebClientResponseException.BadRequest.class})
+    public CrmResponse submitCustomerFromDelayedQueue(CustomerCrmRequest request) {
+        try {
+            // 频率控制：等待可用调用槽位（延迟队列优先级）
+            rateLimiterService.waitForAvailableSlot("customer", true);
+            
+            log.info("延迟队列调用CRM API提交客户数据: cusName={}, remainingCalls={}", 
+                    request.getCusName(), rateLimiterService.getRemainingCalls("customer", true));
+            
+            CrmResponse response = webClient
+                    .post()
+                    .uri(CrmApiEnum.ADD_CUSTOMER.getUrl())
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(CrmResponse.class)
+                    .block();
+            
+            if (response != null && response.isSuccess()) {
+                log.info("延迟队列CRM API调用成功: cusName={}, requestCode={}", 
+                        request.getCusName(), response.getRequestCode());
+            } else {
+                log.warn("延迟队列CRM API调用失败: cusName={}, code={}, msg={}", 
+                        request.getCusName(), 
+                        response != null ? response.getCode() : "null", 
+                        response != null ? response.getMsg() : "null");
+            }
+            
+            return response;
+            
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("延迟队列CRM API频率控制等待被中断: cusName={}", request.getCusName(), e);
+            return CrmResponse.builder()
+                    .code(429)
+                    .msg("频率控制等待被中断: " + e.getMessage())
+                    .build();
+        } catch (WebClientResponseException e) {
+            log.error("延迟队列CRM API HTTP错误: cusName={}, status={}, body={}", 
+                    request.getCusName(), e.getStatusCode(), e.getResponseBodyAsString(), e);
+            
+            // 检查是否为频率限制错误
+            CrmResponse errorResponse = CrmResponse.builder()
+                    .code(e.getStatusCode().value())
+                    .msg("HTTP错误: " + e.getMessage())
+                    .build();
+            
+            // 如果是400错误且包含频率限制信息，标记为频率限制错误
+            if (e.getStatusCode().value() == 400 && 
+                (e.getResponseBodyAsString().contains("频率过高") || 
+                 e.getResponseBodyAsString().contains("稍后重试"))) {
+                errorResponse.setMsg("接口调用频率过高，请稍后重试");
+            }
+            
+            return errorResponse;
+        } catch (Exception e) {
+            log.error("延迟队列CRM API调用异常: cusName={}", request.getCusName(), e);
+            return CrmResponse.builder()
+                    .code(500)
+                    .msg("系统异常: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    /**
+     * 提交订单数据到CRM（延迟队列专用）
+     */
+    @Retryable(value = {Exception.class}, maxAttempts = 3, backoff = @Backoff(delay = 1000),
+               exclude = {WebClientResponseException.BadRequest.class})
+    public CrmResponse submitOrderFromDelayedQueue(OrderCrmRequest request) {
+        try {
+            // 频率控制：等待可用调用槽位（延迟队列优先级）
+            rateLimiterService.waitForAvailableSlot("order", true);
+            
+            log.info("延迟队列提交订单数据到CRM: title={}, cusName={}, dealAmount={}, remainingCalls={}", 
+                    request.getTitle(), request.getCusName(), request.getDealAmount(),
+                    rateLimiterService.getRemainingCalls("order", true));
+            log.debug("延迟队列订单数据详情: {}", request);
+            
+            CrmResponse response = webClient
+                    .post()
+                    .uri(CrmApiEnum.ADD_ORDER.getUrl())
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(CrmResponse.class)
+                    .block();
+            
+            if (response != null) {
+                log.info("延迟队列订单数据提交完成: title={}, code={}, msg={}, requestCode={}", request.getTitle(), response.getCode(), response.getMsg(), response.getRequestCode());
+            }
+            
+            return response;
+            
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("延迟队列CRM API频率控制等待被中断: title={}", request.getTitle(), e);
+            return CrmResponse.builder()
+                    .code(429)
+                    .msg("频率控制等待被中断: " + e.getMessage())
+                    .build();
+        } catch (WebClientResponseException e) {
+            log.error("延迟队列订单数据提交HTTP错误: title={}, status={}, body={}", 
+                    request.getTitle(), e.getStatusCode(), e.getResponseBodyAsString(), e);
+            
+            // 检查是否为频率限制错误
+            CrmResponse errorResponse = CrmResponse.builder()
+                    .code(e.getStatusCode().value())
+                    .msg("HTTP错误: " + e.getMessage())
+                    .build();
+            
+            // 如果是400错误且包含频率限制信息，标记为频率限制错误
+            if (e.getStatusCode().value() == 400 && 
+                (e.getResponseBodyAsString().contains("频率过高") || 
+                 e.getResponseBodyAsString().contains("稍后重试"))) {
+                errorResponse.setMsg("接口调用频率过高，请稍后重试");
+            }
+            
+            return errorResponse;
+        } catch (Exception e) {
+            log.error("延迟队列订单数据提交异常: title={}", request.getTitle(), e);
+            return CrmResponse.builder()
+                    .code(500)
+                    .msg("系统异常: " + e.getMessage())
+                    .build();
+        }
+    }
     @Retryable(value = {Exception.class}, maxAttempts = 2, backoff = @Backoff(delay = 1000),
                exclude = {WebClientResponseException.NotFound.class})
     public CrmStatusResponse queryExecutionResult(String requestCode) {

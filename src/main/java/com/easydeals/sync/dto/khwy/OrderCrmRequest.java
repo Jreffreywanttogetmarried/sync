@@ -205,7 +205,13 @@ public class OrderCrmRequest {
      */
     @JsonProperty("product_options")
     private String productOptions;
-    
+
+    /**
+     * 订单记录的手机号
+     */
+    @JsonProperty("order_telephone")
+    private String orderTelephone;
+
     /**
      * 成交产品列表
      */
