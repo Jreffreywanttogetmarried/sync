@@ -3,27 +3,68 @@
   "version": "1.0.0",
   "description": "Sync application dev environment deployment scripts",
   "scripts": {
-    "deploy": "npm run docker:deploy",
+    "deploy": "npm run deploy:dev",
     "build:local": "./mvnw clean package -DskipTests",
-    "docker:build": "docker-compose -f docker-compose-dev.yml build --no-cache",
+    
+    "docker:build:dev": "docker-compose -f docker-compose-dev.yml build --no-cache",
+    "docker:build:prod": "docker-compose -f docker-compose-prod.yml build --no-cache",
+    "docker:build": "npm run docker:build:dev",
     "docker:build:fallback": "npm run build:local && cp Dockerfile.fallback Dockerfile && npm run docker:build && cp Dockerfile.fallback.bak Dockerfile",
-    "docker:up": "docker-compose -f docker-compose-dev.yml up -d",
-    "docker:down": "docker-compose -f docker-compose-dev.yml down",
-    "docker:stop": "docker-compose -f docker-compose-dev.yml stop",
-    "docker:restart": "npm run docker:down && npm run docker:up",
-    "docker:deploy": "npm run docker:down && npm run docker:build && npm run docker:up",
+    
+    "docker:up:dev": "docker-compose -f docker-compose-dev.yml up -d",
+    "docker:up:prod": "docker-compose -f docker-compose-prod.yml up -d",
+    "docker:up": "npm run docker:up:dev",
+    
+    "docker:down:dev": "docker-compose -f docker-compose-dev.yml down",
+    "docker:down:prod": "docker-compose -f docker-compose-prod.yml down",
+    "docker:down": "npm run docker:down:dev",
+    
+    "docker:stop:dev": "docker-compose -f docker-compose-dev.yml stop",
+    "docker:stop:prod": "docker-compose -f docker-compose-prod.yml stop",
+    "docker:stop": "npm run docker:stop:dev",
+    
+    "docker:restart:dev": "npm run docker:down:dev && npm run docker:up:dev",
+    "docker:restart:prod": "npm run docker:down:prod && npm run docker:up:prod",
+    "docker:restart": "npm run docker:restart:dev",
+    
+    "deploy:dev": "npm run docker:down:dev && npm run docker:build:dev && npm run docker:up:dev",
+    "deploy:prod": "npm run docker:down:prod && npm run docker:build:prod && npm run docker:up:prod",
+    "docker:deploy": "npm run deploy:dev",
     "docker:deploy:fallback": "npm run docker:down && npm run docker:build:fallback && npm run docker:up",
-    "docker:redeploy": "echo 'Starting redeploy...' && npm run docker:stop && npm run docker:build && npm run docker:up && echo 'Redeploy completed!'",
-    "docker:logs": "docker-compose -f docker-compose-dev.yml logs -f",
-    "docker:logs:app": "docker-compose -f docker-compose-dev.yml logs -f sync-test-app",
-    "docker:logs:mysql": "docker-compose -f docker-compose-dev.yml logs -f sync-test-mysql",
-    "docker:logs:redis": "docker-compose -f docker-compose-dev.yml logs -f sync-test-redis",
-    "docker:status": "docker-compose -f docker-compose-dev.yml ps",
-    "docker:clean": "docker-compose -f docker-compose-dev.yml down -v --rmi all",
-    "docker:clean:all": "npm run docker:clean && docker system prune -f",
+    
+    "docker:redeploy:dev": "echo 'Starting dev redeploy...' && npm run docker:stop:dev && npm run docker:build:dev && npm run docker:up:dev && echo 'Dev redeploy completed!'",
+    "docker:redeploy:prod": "echo 'Starting prod redeploy...' && npm run docker:stop:prod && npm run docker:build:prod && npm run docker:up:prod && echo 'Prod redeploy completed!'",
+    "docker:redeploy": "npm run docker:redeploy:dev",
+    
+    "docker:logs:dev": "docker-compose -f docker-compose-dev.yml logs -f",
+    "docker:logs:prod": "docker-compose -f docker-compose-prod.yml logs -f",
+    "docker:logs": "npm run docker:logs:dev",
+    
+    "docker:logs:app:dev": "docker-compose -f docker-compose-dev.yml logs -f sync-test-app",
+    "docker:logs:app:prod": "docker-compose -f docker-compose-prod.yml logs -f sync-prod-app",
+    "docker:logs:app": "npm run docker:logs:app:dev",
+    
+    "docker:logs:mysql:dev": "docker-compose -f docker-compose-dev.yml logs -f sync-test-mysql",
+    "docker:logs:mysql:prod": "docker-compose -f docker-compose-prod.yml logs -f sync-prod-mysql",
+    "docker:logs:mysql": "npm run docker:logs:mysql:dev",
+    
+    "docker:logs:redis:dev": "docker-compose -f docker-compose-dev.yml logs -f sync-test-redis",
+    "docker:logs:redis:prod": "docker-compose -f docker-compose-prod.yml logs -f sync-prod-redis",
+    "docker:logs:redis": "npm run docker:logs:redis:dev",
+    
+    "docker:status:dev": "docker-compose -f docker-compose-dev.yml ps",
+    "docker:status:prod": "docker-compose -f docker-compose-prod.yml ps",
+    "docker:status": "npm run docker:status:dev",
+    
+    "docker:clean:dev": "docker-compose -f docker-compose-dev.yml down -v --rmi all",
+    "docker:clean:prod": "docker-compose -f docker-compose-prod.yml down -v --rmi all",
+    "docker:clean": "npm run docker:clean:dev",
+    "docker:clean:all": "npm run docker:clean:dev && npm run docker:clean:prod && docker system prune -f",
+    
     "health:check": "curl -f http://localhost:8061/actuator/health || echo 'Application not ready yet'",
-    "db:init": "docker-compose -f docker-compose-dev.yml exec sync-test-mysql mysql -u root -p123456 sync_test < /docker-entrypoint-initdb.d/01-schema.sql",
-    "help": "echo 'Available commands: deploy, docker:stop, docker:redeploy, docker:build, docker:up, docker:down, docker:restart, docker:logs, docker:status, docker:clean, health:check, docker:deploy:fallback'"
+    "db:init:dev": "docker-compose -f docker-compose-dev.yml exec sync-test-mysql mysql -u root -p123456 sync_test < /docker-entrypoint-initdb.d/01-schema.sql",
+    "db:init:prod": "docker-compose -f docker-compose-prod.yml exec sync-prod-mysql mysql -u root -p sync_prod < /docker-entrypoint-initdb.d/01-schema.sql",
+    "help": "echo 'Available commands: deploy (dev), deploy:dev, deploy:prod, docker:down, docker:down:dev, docker:down:prod, docker:stop, docker:redeploy, docker:logs, docker:status, docker:clean, health:check'"
   },
   "keywords": [
     "docker",

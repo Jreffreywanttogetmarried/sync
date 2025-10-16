@@ -1,0 +1,20 @@
+singleServerConfig:
+  address: "redis://sync-prod-redis:6379"
+  password: null
+  database: 15
+  connectionMinimumIdleSize: 20
+  connectionPoolSize: 128
+  dnsMonitoringInterval: 5000
+  subscriptionConnectionMinimumIdleSize: 2
+  subscriptionConnectionPoolSize: 100
+  subscriptionConnectionTimeout: 10000
+  timeout: 3000
+  retryAttempts: 3
+  retryInterval: 1500
+  keepAlive: true
+  tcpNoDelay: true
+
+threads: 32
+nettyThreads: 64
+codec: !<org.redisson.codec.JsonJacksonCodec> {}
+transportMode: "NIO"

@@ -452,13 +452,30 @@ sync.rate-limit.max-calls-per-minute=40
 ```
 
 ### 环境配置
-- **开发环境**: `application-dev.properties`
-- **测试环境**: `application-test.properties`  
+- **开发环境**: `application-local.properties`
+- **测试环境**: `application-dev.properties`  
 - **生产环境**: `application-prod.properties`
 
 ## 🚀 部署指南
 
 ### 快速部署 (推荐)
+
+## 快速部署
+
+### 真实示例(先git pull最新代码)
+```bash
+    # 关闭测试环境服务
+    npm run docker-down
+    
+    # 部署测试环境
+    npm run deploy
+    
+    #关闭正式环境服务
+    npm run docker-down:prod
+    
+    #部署正式环境
+    npm run deploy:prod
+```
 
 #### 1. 环境准备
 ```bash

@@ -31,6 +31,22 @@
 
 ## 快速部署
 
+### 简单示例
+```bash
+    # 关闭测试环境服务
+    npm run docker-down
+    
+    # 部署测试环境
+    npm run deploy
+    
+    #关闭正式环境服务
+    npm run docker-down:prod
+    
+    #部署正式环境
+    npm run deploy:prod
+```
+
+
 ### 1. 一键部署（推荐）
 ```bash
 # 执行完整部署流程：Docker构建 -> 部署
